@@ -1,12 +1,24 @@
-import { Button, Stack, SvgIcon, Tooltip } from "@mui/material";
-import { Close, FileDownload, FileUpload } from "@mui/icons-material";
+import {
+  Button,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Stack,
+  SvgIcon,
+  Tooltip,
+} from "@mui/material";
+import { Close, ContentPasteGo, FileDownload, FileUpload } from "@mui/icons-material";
 import { ApiGetCall } from "../../api/ApiCall";
 import { useDialog } from "../../hooks/use-dialog";
+import { useIsMobileLayout } from "../../hooks/use-breakpoint";
 import { CippApiDialog } from "../CippComponents/CippApiDialog";
+import { CippPageActionsFab } from "../CippComponents/CippPageActionsFab";
 import { useState } from "react";
 
 export const CippPermissionReport = (props) => {
   const { importReport, setImportReport } = props;
+  const isMobile = useIsMobileLayout();
   const [importError, setImportError] = useState(false);
   const [currentFile, setCurrentFile] = useState(null);
   const createDialog = useDialog();
@@ -54,9 +66,9 @@ export const CippPermissionReport = (props) => {
     gdapReport.waiting = true;
     tenantReport.waiting = true;
     const report = {
-      Permissions: permissionReport.data,
-      GDAP: gdapReport.data,
-      Tenants: tenantReport.data,
+      Permissions: permissionReport?.data,
+      GDAP: gdapReport?.data,
+      Tenants: tenantReport?.data,
     };
 
     const customerProps = [
@@ -68,19 +80,21 @@ export const CippPermissionReport = (props) => {
       "DisplayName",
       "DefaultDomainName",
       "UserPrincipalName",
+      "ServiceAccount",
       "IPAddress",
-      "GDAPRoles",
+      "AssignedRoles",
+      "GDAPRoles", // reports exported before AssignedRoles was renamed
     ];
 
     if (formData.redactCustomerData) {
       report.Tenants.Results = report?.Tenants?.Results?.map((tenant) => {
         customerProps.forEach((prop) => {
-          if (tenant[prop]) {
-            if (prop === "GDAPRoles") {
+          if (tenant?.[prop]) {
+            if (prop === "AssignedRoles" || prop === "GDAPRoles") {
               tenant[prop] = tenant[prop].map((role) => {
-                if (Array.isArray(role.Group)) {
-                  role.Group = role.Group.map((group) => group.split("@")[0]);
-                } else {
+                if (Array.isArray(role?.Group)) {
+                  role.Group = role.Group.map((group) => group?.split("@")[0]);
+                } else if (role?.Group) {
                   role.Group = role.Group.split("@")[0];
                 }
                 return role;
@@ -95,7 +109,7 @@ export const CippPermissionReport = (props) => {
 
       report?.GDAP?.Results?.GDAPIssues?.map((issue) => {
         customerProps.forEach((prop) => {
-          if (issue[prop]) {
+          if (issue?.[prop]) {
             issue[prop] = redactString(issue[prop]);
           }
         });
@@ -104,7 +118,7 @@ export const CippPermissionReport = (props) => {
 
       report?.Permissions?.Results?.CPVRefreshList?.map((cpv) => {
         customerProps.forEach((prop) => {
-          if (cpv[prop]) {
+          if (cpv?.[prop]) {
             cpv[prop] = redactString(cpv[prop]);
           }
         });
@@ -115,6 +129,11 @@ export const CippPermissionReport = (props) => {
         if (report?.Permissions?.Results?.AccessTokenDetails?.[prop]) {
           report.Permissions.Results.AccessTokenDetails[prop] = redactString(
             report.Permissions.Results.AccessTokenDetails[prop]
+          );
+        }
+        if (report?.Permissions?.Results?.ApplicationTokenDetails?.[prop]) {
+          report.Permissions.Results.ApplicationTokenDetails[prop] = redactString(
+            report.Permissions.Results.ApplicationTokenDetails[prop]
           );
         }
       });
@@ -139,7 +158,7 @@ export const CippPermissionReport = (props) => {
     reader.onload = (e) => {
       const report = JSON.parse(e.target.result);
 
-      if (!report.Permissions || !report.GDAP || !report.Tenants) {
+      if (!report?.Permissions && !report?.GDAP && !report?.Tenants) {
         setImportError("Invalid report format");
         return;
       }
@@ -151,9 +170,25 @@ export const CippPermissionReport = (props) => {
     e.target.value = null;
   };
 
-  return (
+  const handleImportFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const report = JSON.parse(text);
+
+      if (!report?.Permissions && !report?.GDAP && !report?.Tenants) {
+        setImportError("Invalid report format");
+        return;
+      }
+      setCurrentFile({ name: "Clipboard Data" });
+      setImportReport(report);
+      setImportError(false);
+    } catch (error) {
+      setImportError("Failed to read from clipboard");
+    }
+  };
+
+  const reportButtons = (
     <>
-      <Stack direction="row" spacing={2}>
         <Button
           size="small"
           variant="contained"
@@ -187,6 +222,19 @@ export const CippPermissionReport = (props) => {
             id="report-upload"
           />
         </Button>
+        <Button
+          size="small"
+          variant="contained"
+          color="primary"
+          onClick={handleImportFromClipboard}
+          startIcon={
+            <SvgIcon fontSize="small">
+              <ContentPasteGo />
+            </SvgIcon>
+          }
+        >
+          Paste Report
+        </Button>
         {importReport && (
           <Tooltip title="Close report">
             <Button
@@ -219,7 +267,65 @@ export const CippPermissionReport = (props) => {
             {importError}
           </Button>
         )}
-      </Stack>
+    </>
+  );
+
+  return (
+    <>
+      {/* Page-level utilities: a row of contained buttons on desktop, but three of those
+          stacked full-width at 390px read as a banner wall — on mobile they ride in the
+          page-actions FAB sheet as plain list rows, uniform with every other sheet action.
+          TabbedLayout no longer puts anything in that corner, so the FAB is this page's own. */}
+      {isMobile ? (
+        <CippPageActionsFab title="Report" restackButtons={false}>
+          <List sx={{ py: 0 }}>
+            <ListItemButton onClick={createDialog.handleOpen} sx={{ minHeight: 48 }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <FileDownload fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Export Report" />
+            </ListItemButton>
+            {/* The sheet stays mounted (keepMounted), so the hidden input survives the
+                sheet closing while the OS file picker is up. */}
+            <ListItemButton component="label" sx={{ minHeight: 48 }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <FileUpload fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Import Report" />
+              <input type="file" hidden onChange={handleImportReport} accept=".json" />
+            </ListItemButton>
+            <ListItemButton onClick={handleImportFromClipboard} sx={{ minHeight: 48 }}>
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <ContentPasteGo fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Paste Report" />
+            </ListItemButton>
+            {importReport && (
+              <ListItemButton onClick={() => setImportReport(false)} sx={{ minHeight: 48 }}>
+                <ListItemIcon sx={{ minWidth: 40 }}>
+                  <Close fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary={`Close report — ${currentFile.name}`} />
+              </ListItemButton>
+            )}
+            {importError && (
+              <ListItemButton
+                onClick={() => setImportError(false)}
+                sx={{ minHeight: 48, color: "error.main" }}
+              >
+                <ListItemIcon sx={{ minWidth: 40, color: "error.main" }}>
+                  <Close fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary={importError} />
+              </ListItemButton>
+            )}
+          </List>
+        </CippPageActionsFab>
+      ) : (
+        <Stack direction="row" spacing={2}>
+          {reportButtons}
+        </Stack>
+      )}
       <CippApiDialog
         title="Export Diagnostic Report"
         createDialog={createDialog}

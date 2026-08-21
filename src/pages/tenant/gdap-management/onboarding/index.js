@@ -1,10 +1,10 @@
-import { TabbedLayout } from "/src/layouts/TabbedLayout";
-import { Layout as DashboardLayout } from "/src/layouts/index.js";
+import { TabbedLayout } from "../../../../layouts/TabbedLayout";
+import { Layout as DashboardLayout } from "../../../../layouts/index.js";
 import tabOptions from "../tabOptions";
-import { CippTablePage } from "/src/components/CippComponents/CippTablePage.jsx";
+import { CippTablePage } from "../../../../components/CippComponents/CippTablePage.jsx";
 import { Button } from "@mui/material";
 import Link from "next/link";
-import { Cancel, Replay } from "@mui/icons-material";
+import { Cancel, PlayArrow, Replay } from "@mui/icons-material";
 
 const pageTitle = "Tenant Onboarding";
 
@@ -15,7 +15,7 @@ const actions = [
     url: "/api/ExecOnboardTenant",
     data: { id: "RowKey", Cancel: true },
     confirmText: "Are you sure you want to cancel these onboardings?",
-    multiPost: true,
+    multiPost: false,
     icon: <Cancel />,
   },
   {
@@ -24,7 +24,7 @@ const actions = [
     url: "/api/ExecOnboardTenant",
     data: { id: "RowKey", Retry: true },
     confirmText: "Are you sure you want to retry these onboardings?",
-    multiPost: true,
+    multiPost: false,
     icon: <Replay />,
   },
 ];
@@ -49,10 +49,15 @@ const Page = () => {
       tenantInTitle={false}
       queryKey="ListTenantOnboarding"
       cardButton={
-        <Button component={Link} href="/tenant/gdap-management/onboarding/start">
+        <Button
+          component={Link}
+          href="/tenant/gdap-management/onboarding/start"
+          startIcon={<PlayArrow />}
+        >
           Start Tenant Onboarding
         </Button>
       }
+      maxHeightOffset="460px"
     />
   );
 };

@@ -1,196 +1,115 @@
-import { Layout as DashboardLayout } from "/src/layouts/index.js";
-import { CippTablePage } from "/src/components/CippComponents/CippTablePage.jsx";
-import Link from "next/link";
-import { Button } from "@mui/material";
-
+import { Layout as DashboardLayout } from '../../../../layouts/index.js'
+import { CippTablePage } from '../../../../components/CippComponents/CippTablePage.jsx'
+import CippExchangeActions from '../../../../components/CippComponents/CippExchangeActions'
+import { CippSharedMailboxDrawer } from '../../../../components/CippComponents/CippSharedMailboxDrawer.jsx'
+import { useCippReportDB } from '../../../../components/CippComponents/CippReportDBControls'
 import {
-  Archive,
-  MailOutline,
-  Person,
-  Room,
-  Visibility,
-  VisibilityOff,
-  PhonelinkLock,
-  Key,
-} from "@mui/icons-material";
-import { TrashIcon, MagnifyingGlassIcon, PlayCircleIcon } from "@heroicons/react/24/outline";
+  CippAnonymizedReportAlert,
+  useReportAnonymized,
+} from '../../../../components/CippComponents/CippAnonymizedReportAlert'
+import { Stack } from '@mui/system'
 
 const Page = () => {
-  const pageTitle = "Mailboxes";
+  const pageTitle = 'Mailboxes'
 
-  // Define actions for mailboxes
-  const actions = [
-    {
-      label: "Edit permissions",
-      link: "/identity/administration/users/user/exchange?userId=[ExternalDirectoryObjectId]",
-      color: "info",
-      icon: <Key />,
-    },
-    {
-      label: "Research Compromised Account",
-      link: "/identity/administration/users/user/bec?userId=[ExternalDirectoryObjectId]",
-      color: "info",
-      icon: <MagnifyingGlassIcon />,
-    },
-    {
-      label: "Send MFA Push",
-      type: "GET",
-      url: "/api/ExecSendPush",
-      data: {
-        UserEmail: "UPN",
-      },
-      confirmText: "Are you sure you want to send an MFA request?",
-      icon: <PhonelinkLock />,
-    },
-    {
-      label: "Convert to Shared Mailbox",
-      type: "GET",
-      icon: <MailOutline />,
-      url: "/api/ExecConvertToSharedMailbox",
-      data: {
-        ID: "UPN",
-      },
-      confirmText: "Are you sure you want to convert this mailbox to a shared mailbox?",
-      condition: (row) => row.recipientTypeDetails !== "SharedMailbox",
-    },
-    {
-      label: "Convert to User Mailbox",
-      type: "GET",
-      url: "/api/ExecConvertToSharedMailbox",
-      icon: <Person />,
-      data: {
-        ID: "UPN",
-        ConvertToUser: true,
-      },
-      confirmText: "Are you sure you want to convert this mailbox to a user mailbox?",
-      condition: (row) => row.recipientTypeDetails !== "UserMailbox",
-    },
-    {
-      label: "Convert to Room Mailbox",
-      type: "GET",
-      url: "/api/ExecConvertToRoomMailbox",
-      icon: <Room />,
-      data: {
-        ID: "UPN",
-      },
-      confirmText: "Are you sure you want to convert this mailbox to a room mailbox?",
-      condition: (row) => row.recipientTypeDetails !== "RoomMailbox",
-    },
-    {
-      //tested
-      label: "Enable Online Archive",
-      type: "GET",
-      icon: <Archive />,
-      url: "/api/ExecEnableArchive",
-      data: { ID: "UPN" },
-      confirmText: "Are you sure you want to enable the online archive for this user?",
-      multiPost: false,
-      condition: (row) => row.ArchiveGuid === "00000000-0000-0000-0000-000000000000",
-    },
-    {
-      label: "Hide from Global Address List",
-      type: "POST",
-      url: "/api/ExecHideFromGAL",
-      icon: <VisibilityOff />,
-      data: {
-        ID: "UPN",
-        HidefromGAL: true,
-      },
-      confirmText:
-        "Are you sure you want to hide this mailbox from the global address list? This will not work if the user is AD Synced.",
-      condition: (row) => row.HiddenFromAddressListsEnabled === false,
-    },
-    {
-      label: "Unhide from Global Address List",
-      type: "POST",
-      url: "/api/ExecHideFromGAL",
-      icon: <Visibility />,
-      data: {
-        ID: "UPN",
-      },
-      confirmText:
-        "Are you sure you want to unhide this mailbox from the global address list? This will not work if the user is AD Synced.",
-      condition: (row) => row.HiddenFromAddressListsEnabled === true,
-    },
-    {
-      label: "Start Managed Folder Assistant",
-      type: "GET",
-      url: "/api/ExecStartManagedFolderAssistant",
-      icon: <PlayCircleIcon />,
-      data: {
-        ID: "UPN",
-      },
-      confirmText: "Are you sure you want to start the managed folder assistant for this user?",
-    },
-    {
-      label: "Delete Mailbox",
-      type: "GET",
-      icon: <TrashIcon />, // Added
-      url: "/api/RemoveMailbox",
-      data: { ID: "UPN" },
-      confirmText: "Are you sure you want to delete this mailbox?",
-      multiPost: false,
-    },
-  ];
+  const reportDB = useCippReportDB({
+    apiUrl: '/api/ListMailboxes',
+    queryKey: 'ListMailboxes',
+    cacheName: 'Mailboxes',
+    syncTitle: 'Sync Mailboxes',
+    allowToggle: true,
+    defaultCached: true,
+  })
+
+  // Anonymized report names break the usage merge in the Mailboxes cache sync, leaving
+  // storageUsedInBytes at 0 for every mailbox (cached mode only — live mode has no usage data).
+  const allZeroStorage = useReportAnonymized({
+    url: reportDB.resolvedApiUrl,
+    queryKey: reportDB.resolvedQueryKey,
+    check: (rows) => rows.every((mailbox) => !Number(mailbox?.storageUsedInBytes)),
+  })
 
   // Define off-canvas details
   const offCanvas = {
-    extendedInfoFields: ["displayName", "UPN", "AdditionalEmailAddresses", "recipientTypeDetails"],
-    actions: actions,
-  };
+    extendedInfoFields: ['displayName', 'UPN', 'AdditionalEmailAddresses', 'recipientTypeDetails'],
+    actions: CippExchangeActions(),
+  }
 
   const filterList = [
     {
-      filterName: "View User Mailboxes",
-      value: [{ id: "recipientTypeDetails", value: "UserMailbox" }],
-      type: "column",
+      filterName: 'View User Mailboxes',
+      value: [{ id: 'recipientTypeDetails', value: 'UserMailbox' }],
+      type: 'column',
     },
     {
-      filterName: "View Shared Mailboxes",
-      value: [{ id: "recipientTypeDetails", value: "SharedMailbox" }],
-      type: "column",
+      filterName: 'View Shared Mailboxes',
+      value: [{ id: 'recipientTypeDetails', value: 'SharedMailbox' }],
+      type: 'column',
     },
     {
-      filterName: "View Room Mailboxes",
-      value: [{ id: "recipientTypeDetails", value: "RoomMailbox" }],
-      type: "column",
+      filterName: 'View Room Mailboxes',
+      value: [{ id: 'recipientTypeDetails', value: 'RoomMailbox' }],
+      type: 'column',
     },
     {
-      filterName: "View Equipment Mailboxes",
-      value: [{ id: "recipientTypeDetails", value: "EquipmentMailbox" }],
-      type: "column",
+      filterName: 'View Equipment Mailboxes',
+      value: [{ id: 'recipientTypeDetails', value: 'EquipmentMailbox' }],
+      type: 'column',
     },
-  ];
+    {
+      filterName: 'View Archive-Enabled Mailboxes',
+      value: [{ id: 'ArchiveEnabled', value: true }],
+      type: 'column',
+    },
+    {
+      filterName: 'View Auto Expanding Archive Enabled',
+      value: [{ id: 'AutoExpandingArchive', value: true }],
+      type: 'column',
+    },
+  ]
 
   // Simplified columns for the table
   const simpleColumns = [
-    "displayName", // Display Name
-    "recipientTypeDetails", // Recipient Type Details
-    "UPN", // User Principal Name
-    "primarySmtpAddress", // Primary Email Address
-    "recipientType", // Recipient Type
-    "AdditionalEmailAddresses", // Additional Email Addresses
-  ];
+    ...reportDB.cacheColumns.filter((c) => c === 'Tenant'),
+    'displayName',
+    'recipientTypeDetails',
+    'UPN',
+    'primarySmtpAddress',
+    'AdditionalEmailAddresses',
+    ...(reportDB.useReportDB ? ['storageUsedInBytes'] : []),
+    'ArchiveEnabled',
+    ...(reportDB.useReportDB ? ['ArchiveSize'] : []),
+    ...reportDB.cacheColumns.filter((c) => c !== 'Tenant'),
+  ]
 
   return (
-    <CippTablePage
-      title={pageTitle}
-      apiUrl="/api/ListMailboxes"
-      actions={actions}
-      offCanvas={offCanvas}
-      simpleColumns={simpleColumns}
-      filters={filterList}
-      cardButton={
-        <>
-          <Button component={Link} href="/email/administration/mailboxes/addshared">
-            Add Shared Mailbox
-          </Button>
-        </>
-      }
-    />
-  );
-};
+    <>
+      <CippTablePage
+        title={pageTitle}
+        apiUrl={reportDB.resolvedApiUrl}
+        queryKey={reportDB.resolvedQueryKey}
+        actions={CippExchangeActions()}
+        offCanvas={offCanvas}
+        simpleColumns={simpleColumns}
+        filters={filterList}
+        tableFilter={
+          <CippAnonymizedReportAlert show={reportDB.useReportDB && allZeroStorage}>
+            All mailboxes report 0 storage used, which usually means Microsoft 365 report
+            anonymization is enabled for this tenant.
+          </CippAnonymizedReportAlert>
+        }
+        cardButton={
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CippSharedMailboxDrawer />
+          </Stack>
+        }
+        dataSourceControls={reportDB.controls}
+      />
+      {reportDB.syncDialog}
+    </>
+  )
+}
 
-Page.getLayout = (page) => <DashboardLayout>{page}</DashboardLayout>;
+Page.getLayout = (page) => <DashboardLayout allTenantsSupport={true}>{page}</DashboardLayout>
 
-export default Page;
+export default Page
